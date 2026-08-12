@@ -93,21 +93,70 @@ export function parseQuestionBank(htmlString) {
   let totalParsed = 0;
   let failedCount = 0;
   const errors = [];
+  let globalId = 0;
 
-  // Find all iframe containers that hold topic content
+  // 1. Detect Combined Format (TESTS_LIST)
+  let testsListStartIdx = htmlString.indexOf('TESTS_LIST = [');
+  if (testsListStartIdx !== -1) {
+    // Extract everything from '[' onwards for the TESTS_LIST array
+    const arrayContent = htmlString.substring(htmlString.indexOf('[', testsListStartIdx));
+    const testObjectsStrings = extractObjectsFromArray(arrayContent);
+    
+    testObjectsStrings.forEach((testStr, testIdx) => {
+      try {
+        let testObj;
+        try {
+          testObj = JSON.parse(testStr);
+        } catch (e) {
+          testObj = new Function('return (' + testStr + ')')();
+        }
+        
+        const topicName = testObj.title || `Unknown Topic ${testIdx + 1}`;
+        const questions = testObj.questions || [];
+        const parsedQuestions = [];
+        
+        questions.forEach((rawQ, qIdx) => {
+          try {
+            const normalized = normalizeQuestion(rawQ, topicName, `${topicName}-${qIdx}-${globalId++}`);
+            parsedQuestions.push(normalized);
+            totalParsed++;
+          } catch (e) {
+            failedCount++;
+            errors.push({ topic: topicName, index: qIdx, message: `Failed to normalize question: ${e.message}` });
+          }
+        });
+        
+        if (parsedQuestions.length > 0) {
+          topicsMap.set(topicName, {
+            name: topicName,
+            questions: parsedQuestions,
+            count: parsedQuestions.length
+          });
+        }
+      } catch (e) {
+        errors.push({ topic: 'Global', index: testIdx, message: `Failed to parse test object: ${e.message}` });
+      }
+    });
+    
+    return {
+      topics: Array.from(topicsMap.values()),
+      totalParsed,
+      failedCount,
+      errors
+    };
+  }
+
+  // 2. Detect Legacy Iframe Format
   const containers = doc.querySelectorAll('.iframe-container');
   
   if (containers.length === 0) {
-    // If we can't find .iframe-container, the HTML format is unknown
     return {
       topics: [],
       totalParsed: 0,
       failedCount: 0,
-      errors: [{ topic: 'Global', index: 0, message: 'Could not find any topic containers in the HTML.' }]
+      errors: [{ topic: 'Global', index: 0, message: 'Could not find any topic containers or TESTS_LIST in the HTML.' }]
     };
   }
-
-  let globalId = 0;
 
   containers.forEach(container => {
     const h2 = container.querySelector('h2');
