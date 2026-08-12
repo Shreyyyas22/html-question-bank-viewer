@@ -7,6 +7,10 @@ export default function QuestionViewer({ topic, initialIndex = 0 }) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [showAnswer, setShowAnswer] = useState(false);
   const [selectedOption, setSelectedOption] = useState(null);
+  
+  // Track all answers for the current topic
+  // { [questionIndex]: { selected: optionIdx, isCorrect: boolean, skipped: boolean } }
+  const [userAnswers, setUserAnswers] = useState({});
 
   // Update index if initialIndex prop changes
   useEffect(() => {
@@ -18,14 +22,21 @@ export default function QuestionViewer({ topic, initialIndex = 0 }) {
     if (initialIndex === 0) {
       setCurrentIndex(0);
     }
+    setUserAnswers({});
     setShowAnswer(false);
     setSelectedOption(null);
   }, [topic.name]);
 
-  // Reset answer visibility when question changes
+  // Restore answer state when question changes
   useEffect(() => {
-    setShowAnswer(false);
-    setSelectedOption(null);
+    const existingAnswer = userAnswers[currentIndex];
+    if (existingAnswer) {
+      setShowAnswer(true);
+      setSelectedOption(existingAnswer.skipped ? null : existingAnswer.selected);
+    } else {
+      setShowAnswer(false);
+      setSelectedOption(null);
+    }
   }, [currentIndex]);
 
   const questions = topic.questions;
@@ -54,6 +65,11 @@ export default function QuestionViewer({ topic, initialIndex = 0 }) {
     };
   };
 
+  // Calculate Scores
+  const correctCount = Object.values(userAnswers).filter(a => a.isCorrect && !a.skipped).length;
+  const wrongCount = Object.values(userAnswers).filter(a => !a.isCorrect && !a.skipped).length;
+  const marks = (correctCount * 4) - (wrongCount * 1);
+
   return (
     <div className="w-full max-w-4xl mx-auto space-y-6">
       <QuestionNavigation 
@@ -65,9 +81,14 @@ export default function QuestionViewer({ topic, initialIndex = 0 }) {
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
-          <span className="font-medium text-slate-700 dark:text-slate-300">
-            Question {currentIndex + 1} of {questions.length}
-          </span>
+          <div className="flex flex-col">
+            <span className="font-medium text-slate-700 dark:text-slate-300">
+              Question {currentIndex + 1} of {questions.length}
+            </span>
+            <span className="text-sm font-semibold text-blue-600 dark:text-blue-400 mt-0.5">
+              Marks: {marks} <span className="text-slate-400 font-normal ml-1">(+{correctCount * 4} / -{wrongCount * 1})</span>
+            </span>
+          </div>
           <div className="flex space-x-2">
             <button
               onClick={handlePrev}
@@ -129,6 +150,11 @@ export default function QuestionViewer({ topic, initialIndex = 0 }) {
                   key={idx}
                   onClick={() => {
                     if (!showAnswer) {
+                      const isCorrect = opt.correct || opt.label === question.correctAnswer?.charAt(0);
+                      setUserAnswers(prev => ({
+                        ...prev,
+                        [currentIndex]: { selected: idx, isCorrect, skipped: false }
+                      }));
                       setSelectedOption(idx);
                       setShowAnswer(true);
                     }
@@ -158,7 +184,13 @@ export default function QuestionViewer({ topic, initialIndex = 0 }) {
           {!showAnswer ? (
             <div className="flex justify-center border-t border-slate-100 dark:border-slate-800 pt-6">
               <button 
-                onClick={() => setShowAnswer(true)}
+                onClick={() => {
+                  setUserAnswers(prev => ({
+                    ...prev,
+                    [currentIndex]: { skipped: true }
+                  }));
+                  setShowAnswer(true);
+                }}
                 className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors shadow-sm"
               >
                 Skip & Show Answer
