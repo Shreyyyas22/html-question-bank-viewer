@@ -11,6 +11,7 @@ export default function QuestionViewer({ topic, initialIndex = 0 }) {
   // Track all answers for the current topic
   // { [questionIndex]: { selected: optionIdx, isCorrect: boolean, skipped: boolean } }
   const [userAnswers, setUserAnswers] = useState({});
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
   // Update index if initialIndex prop changes
   useEffect(() => {
@@ -25,6 +26,7 @@ export default function QuestionViewer({ topic, initialIndex = 0 }) {
     setUserAnswers({});
     setShowAnswer(false);
     setSelectedOption(null);
+    setIsSubmitted(false);
   }, [topic.name]);
 
   // Restore answer state when question changes
@@ -68,7 +70,51 @@ export default function QuestionViewer({ topic, initialIndex = 0 }) {
   // Calculate Scores
   const correctCount = Object.values(userAnswers).filter(a => a.isCorrect && !a.skipped).length;
   const wrongCount = Object.values(userAnswers).filter(a => !a.isCorrect && !a.skipped).length;
+  const skippedCount = questions.length - (correctCount + wrongCount);
   const marks = (correctCount * 4) - (wrongCount * 1);
+  const totalMarks = questions.length * 4;
+
+  if (isSubmitted) {
+    return (
+      <div className="w-full max-w-4xl mx-auto space-y-6 animate-in fade-in zoom-in-95 duration-500">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-8 text-center shadow-xl">
+          <h2 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white mb-2">Test Completed!</h2>
+          <p className="text-slate-500 dark:text-slate-400 mb-8 text-lg">{topic.name}</p>
+          
+          <div className="p-8 bg-blue-50 dark:bg-blue-900/20 rounded-2xl mb-8 border border-blue-100 dark:border-blue-800 shadow-inner">
+            <h3 className="text-6xl font-black text-blue-600 dark:text-blue-400 mb-2 tracking-tight">
+              {marks} <span className="text-3xl text-blue-400/60 font-bold">/ {totalMarks}</span>
+            </h3>
+            <p className="text-lg font-medium text-blue-800 dark:text-blue-300">Total Score</p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4 mb-10">
+            <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800/50 rounded-xl">
+              <div className="text-3xl font-bold text-green-600 dark:text-green-400 mb-1">{correctCount}</div>
+              <div className="text-sm font-medium text-green-800 dark:text-green-300">Correct (+4)</div>
+            </div>
+            <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 rounded-xl">
+              <div className="text-3xl font-bold text-red-600 dark:text-red-400 mb-1">{wrongCount}</div>
+              <div className="text-sm font-medium text-red-800 dark:text-red-300">Incorrect (-1)</div>
+            </div>
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl">
+              <div className="text-3xl font-bold text-slate-600 dark:text-slate-400 mb-1">{skippedCount}</div>
+              <div className="text-sm font-medium text-slate-500 dark:text-slate-400">Unanswered</div>
+            </div>
+          </div>
+          
+          <button 
+            onClick={() => setIsSubmitted(false)} 
+            className="px-8 py-3.5 bg-slate-800 hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 text-white rounded-xl font-medium transition-all shadow-md hover:shadow-lg"
+          >
+            Review Answers
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const isLastQuestion = currentIndex === questions.length - 1;
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-6">
@@ -85,9 +131,6 @@ export default function QuestionViewer({ topic, initialIndex = 0 }) {
             <span className="font-medium text-slate-700 dark:text-slate-300">
               Question {currentIndex + 1} of {questions.length}
             </span>
-            <span className="text-sm font-semibold text-blue-600 dark:text-blue-400 mt-0.5">
-              Marks: {marks} <span className="text-slate-400 font-normal ml-1">(+{correctCount * 4} / -{wrongCount * 1})</span>
-            </span>
           </div>
           <div className="flex space-x-2">
             <button
@@ -98,14 +141,22 @@ export default function QuestionViewer({ topic, initialIndex = 0 }) {
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
-            <button
-              onClick={handleNext}
-              disabled={currentIndex === questions.length - 1}
-              className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              aria-label="Next Question"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
+            {!isLastQuestion ? (
+              <button
+                onClick={handleNext}
+                className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                aria-label="Next Question"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            ) : (
+              <button
+                onClick={() => setIsSubmitted(true)}
+                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+              >
+                Submit Test
+              </button>
+            )}
           </div>
         </div>
 
