@@ -6,8 +6,10 @@ function extractObjectsFromArray(jsString) {
   const objects = [];
   let depth = 0;
   let inString = false;
+  let stringChar = null;
   let escape = false;
   let currentObjectStart = -1;
+  let arrayDepth = 0; // Track array brackets to avoid picking up arbitrary JS blocks
 
   for (let i = 0; i < jsString.length; i++) {
     const char = jsString[i];
@@ -17,27 +19,45 @@ function extractObjectsFromArray(jsString) {
         escape = false;
       } else if (char === '\\') {
         escape = true;
-      } else if (char === '"') {
-        inString = false; // We only care about double quotes since strict JSON uses double quotes
+      } else if (char === stringChar) {
+        inString = false;
+        stringChar = null;
       }
       continue;
     }
 
-    if (char === '"') {
+    if (char === '"' || char === "'") {
       inString = true;
+      stringChar = char;
       continue;
+    }
+
+    // Keep track of the top-level array so we only extract objects inside it
+    if (char === '[') {
+      arrayDepth++;
+    } else if (char === ']') {
+      arrayDepth--;
+      if (arrayDepth === 0) {
+        // Once the main questions array is closed, stop parsing completely.
+        // This prevents parsing trailing JavaScript code (like catch blocks).
+        break;
+      }
     }
 
     if (char === '{') {
-      if (depth === 0) {
+      if (depth === 0 && arrayDepth > 0) {
         currentObjectStart = i;
       }
-      depth++;
+      if (arrayDepth > 0) {
+        depth++;
+      }
     } else if (char === '}') {
-      depth--;
-      if (depth === 0 && currentObjectStart !== -1) {
-        objects.push(jsString.substring(currentObjectStart, i + 1));
-        currentObjectStart = -1;
+      if (arrayDepth > 0) {
+        depth--;
+        if (depth === 0 && currentObjectStart !== -1) {
+          objects.push(jsString.substring(currentObjectStart, i + 1));
+          currentObjectStart = -1;
+        }
       }
     }
   }
@@ -146,7 +166,13 @@ export function parseQuestionBank(htmlString) {
     
     objectStrings.forEach((objStr, idx) => {
       try {
-        const rawQ = JSON.parse(objStr);
+        let rawQ;
+        try {
+          rawQ = JSON.parse(objStr);
+        } catch (e) {
+          // Fallback for JS objects (e.g. single quotes, unquoted keys, trailing commas)
+          rawQ = new Function('return (' + objStr + ')')();
+        }
         const normalized = normalizeQuestion(rawQ, topicName, `${topicName}-${idx}-${globalId++}`);
         parsedQuestions.push(normalized);
         totalParsed++;
